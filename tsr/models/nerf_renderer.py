@@ -108,7 +108,7 @@ class TriplaneNeRFRenderer(BaseModule):
 
         t_vals = torch.linspace(
             0, 1, self.cfg.num_samples_per_ray + 1, device=triplane.device
-        )
+        )                
         t_mid = (t_vals[:-1] + t_vals[1:]) / 2.0
         z_vals = t_near * (1 - t_mid[None]) + t_far * t_mid[None]  # (N_rays, N_samples)
 
@@ -148,8 +148,8 @@ class TriplaneNeRFRenderer(BaseModule):
 
         comp_rgb += 1 - opacity[..., None]
         comp_rgb = comp_rgb.view(*rays_shape, 3)
-
-        return comp_rgb
+        opacity = opacity.view(*rays_shape, 1)
+        return comp_rgb, opacity
 
     def forward(
         self,
@@ -157,19 +157,24 @@ class TriplaneNeRFRenderer(BaseModule):
         triplane: torch.Tensor,
         rays_o: torch.Tensor,
         rays_d: torch.Tensor,
+        return_opacity: bool = True,
     ) -> Dict[str, torch.Tensor]:
         if triplane.ndim == 4:
-            comp_rgb = self._forward(decoder, triplane, rays_o, rays_d)
+            comp_rgb, opacity = self._forward(decoder, triplane, rays_o, rays_d)
         else:
-            comp_rgb = torch.stack(
-                [
-                    self._forward(decoder, triplane[i], rays_o[i], rays_d[i])
-                    for i in range(triplane.shape[0])
-                ],
-                dim=0,
-            )
+            comp_rgb, opacity = [],[]
+            for i in range(triplane.shape[0]):
+                comp_rgb_i, opacity_i = self._forward(decoder, triplane[i], rays_o[i], rays_d[i])
+                comp_rgb.append(comp_rgb_i)
+                opacity.append(opacity_i)
 
-        return comp_rgb
+            comp_rgb = torch.stack(comp_rgb, dim=0)
+            opacity = torch.stack(opacity, dim=0)
+
+        if return_opacity:
+            return comp_rgb, opacity
+        else:
+            return comp_rgb
 
     def train(self, mode=True):
         self.randomized = mode and self.cfg.randomized

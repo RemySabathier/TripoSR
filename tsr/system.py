@@ -133,7 +133,18 @@ class TSR(BaseModule):
         rays_o, rays_d = get_spherical_cameras(
             n_views, elevation_deg, camera_distance, fovy_deg, height, width
         )
+
+        return self.render_from_rays(scene_codes, rays_o, rays_d, return_type)
+
+    def render_from_rays(
+        self,
+        scene_codes,
+        rays_o: torch.Tensor,
+        rays_d: torch.Tensor,
+        return_type: str = "pil",
+    ):
         rays_o, rays_d = rays_o.to(scene_codes.device), rays_d.to(scene_codes.device)
+        n_views = rays_o.shape[0]
 
         def process_output(image: torch.FloatTensor):
             if return_type == "pt":
@@ -147,18 +158,19 @@ class TSR(BaseModule):
             else:
                 raise NotImplementedError
 
-        images = []
+        images, masks = [],[]
         for scene_code in scene_codes:
-            images_ = []
+            images_, masks_ = [],[]
             for i in range(n_views):
                 with torch.no_grad():
-                    image = self.renderer(
-                        self.decoder, scene_code, rays_o[i], rays_d[i]
+                    image, mask = self.renderer(
+                        self.decoder, scene_code, rays_o[i], rays_d[i], return_opacity=True
                     )
                 images_.append(process_output(image))
+                masks_.append(process_output(mask))
             images.append(images_)
-
-        return images
+            masks.append(masks_)
+        return images, mask
 
     def set_marching_cubes_resolution(self, resolution: int):
         if (

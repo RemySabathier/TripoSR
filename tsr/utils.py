@@ -365,12 +365,23 @@ def get_spherical_cameras(
         dim=-1,
     )
 
+    return get_spherical_cameras_from_camera_positions(
+        camera_positions, fovy_deg, height, width)
+
+def get_spherical_cameras_from_camera_positions(
+    camera_positions: torch.Tensor,
+    fovy_deg: float,
+    height: int,
+    width: int,
+):
+    n_views = camera_positions.shape[0]
+
     # default scene center at origin
     center = torch.zeros_like(camera_positions)
     # default camera up direction as +z
     up = torch.as_tensor([0, 0, 1], dtype=torch.float32)[None, :].repeat(n_views, 1)
 
-    fovy = torch.full_like(elevation_deg, fovy_deg) * math.pi / 180
+    fovy = torch.full_like(camera_positions[:,0], fovy_deg) * math.pi / 180
 
     lookat = F.normalize(center - camera_positions, dim=-1)
     right = F.normalize(torch.cross(lookat, up), dim=-1)
